@@ -68,8 +68,10 @@ const handleForm = ({
 
   validators.forEach(({ field, isValid }) => {
     field.addEventListener("input", () => {
-      if (isValid()) setFieldInvalid(field, false);
-      updateSubmitBtn();
+      setTimeout(() => {
+        if (isValid()) setFieldInvalid(field, false);
+        updateSubmitBtn();
+      }, 0);
     });
     field.addEventListener("focusout", () => {
       setFieldInvalid(field, !isValid());
