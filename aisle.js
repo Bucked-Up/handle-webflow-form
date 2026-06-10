@@ -1,4 +1,4 @@
-const handleForm = ({ campaignPhoneNumber, apiKey, submitBtnId, formId, submitFunction, klaviyoA, klaviyoG }) => {
+const handleForm = ({ campaignPhoneNumber, apiKey, formId, submitFunction, klaviyoA, klaviyoG }) => {
   const trySentry = ({ error, message }) => {
     try {
       if (error) {
@@ -15,71 +15,16 @@ const handleForm = ({ campaignPhoneNumber, apiKey, submitBtnId, formId, submitFu
       console.error("Error loading sentry.");
     }
   };
-  
-  const submitBtn = document.getElementById(submitBtnId);
+
   const form = document.getElementById(formId);
+  const submitBtn = form.querySelector("[type='submit']");
   const phoneField = document.getElementById("phone_number");
   const emailField = document.getElementById("email");
   VMasker(phoneField).maskPattern("999-999-9999");
 
-  const disableSubmitBtn = () => {
-    submitBtn.setAttribute("disabled", "disabled");
-    submitBtn.style.filter = "contrast(0.5)";
-    submitBtn.style.cursor = "not-allowed";
-  };
-  disableSubmitBtn();
-
   const phoneNumberIsNotValid = () => phoneField.value.trim().replace(/\D/g, '').length < 10;
 
-  phoneField.addEventListener("input", () => {
-    if (phoneNumberIsNotValid()) {
-      submitBtn.setAttribute("disabled", "disabled");
-    } else {
-      submitBtn.removeAttribute("disabled");
-      phoneField.style = "";
-      submitBtn.style = "";
-    }
-  });
-  phoneField.addEventListener("focusout", () => {
-    if (phoneNumberIsNotValid()) {
-      phoneField.style.borderColor = "red";
-      phoneField.style.outline = "1px solid red";
-      disableSubmitBtn();
-    }
-  });
-
-  form.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && submitBtn.hasAttribute("disabled")) {
-      alert("Phone field invalid. Please check if every number is present.");
-    }
-  });
-
-  const handleError = () =>{
-    const p = document.querySelector(".success-message div");
-    if(p) p.innerHTML = "Oops! Something went wrong while submitting the form."
-  }
-
-  const formDone = document.querySelector(".w-form-done");
-
-  const initObserver = () => {
-    const targetElement = formDone;
-    const observer = new MutationObserver((mutationsList) => {
-      for (const mutation of mutationsList) {
-        if (mutation.attributeName === "style") {
-          const displayChanged = mutation.target.style.display !== mutation.oldValue;
-          if (displayChanged) {
-            submitFunction();
-          }
-        }
-      }
-    });
-    observer.observe(targetElement, {
-      attributes: true,
-      attributeOldValue: true,
-    });
-  };
-
-  const postAisle = async (body) =>{
+  const postAisle = async (body) => {
     const response = await fetch("https://console.gotoaisle.com/api/webhooks/manual-input", {
       method: "POST",
       headers: {
@@ -95,7 +40,7 @@ const handleForm = ({ campaignPhoneNumber, apiKey, submitBtnId, formId, submitFu
 
     const data = await response.json();
     console.log("Success:", data);
-  }
+  };
 
   const postKlaviyo = async (formData) => {
     try {
@@ -126,25 +71,54 @@ const handleForm = ({ campaignPhoneNumber, apiKey, submitBtnId, formId, submitFu
   });
 
   form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (phoneNumberIsNotValid()) {
+      alert("Phone field invalid. Please check if every number is present.");
+      return;
+    }
+
+    const originalBtnHTML = submitBtn.innerHTML;
+    submitBtn.innerHTML = `
+        <svg style="display:block;margin:auto;" width="24" height="24" stroke="#fff"
+          viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <style>
+            .spinner_V8m1 { transform-origin: center; animation: spinner_zKoa 2s linear infinite }
+            .spinner_V8m1 circle { stroke-linecap: round; animation: spinner_YpZS 1.5s ease-in-out infinite }
+            @keyframes spinner_zKoa { 100% { transform: rotate(360deg) } }
+            @keyframes spinner_YpZS {
+              0%           { stroke-dasharray: 0 150;  stroke-dashoffset: 0   }
+              47.5%        { stroke-dasharray: 42 150; stroke-dashoffset: -16 }
+              95%, 100%    { stroke-dasharray: 42 150; stroke-dashoffset: -59 }
+            }
+          </style>
+          <g class="spinner_V8m1">
+            <circle cx="12" cy="12" r="9.5" fill="none" stroke-width="3"></circle>
+          </g>
+        </svg>
+      `;
+    submitBtn.setAttribute("disabled", "disabled");
+
     const body = {
       customerPhoneNumber: phoneField.value.replace(/\D/g, ''),
       campaignPhoneNumber: campaignPhoneNumber,
       email: emailField.value,
     };
     const formData = new FormData(e.target);
-
-    formData.set("phone_number", phoneField.value.replace(/\D/g, ''))
+    formData.set("phone_number", phoneField.value.replace(/\D/g, ''));
     formData.append("$fields", ["Accepts-Marketing", "sms_consent", ...Object.keys(utms)]);
     formData.append("Accepts-Marketing", true);
     formData.append("sms_consent", true);
 
     try {
-      await Promise.all([postAisle(body),postKlaviyo(formData)]);
-      if(formDone.style.display === "block") submitFunction();
-      else initObserver();
+      await Promise.all([postAisle(body), postKlaviyo(formData)]);
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({ event: "form-submitted" });
+      window.dataLayer.push({ event: "form_submitted" });
+      submitFunction();
     } catch (error) {
-      trySentry({error: error})
-      handleError();
+      submitBtn.innerHTML = originalBtnHTML;
+      submitBtn.removeAttribute("disabled");
+      trySentry({ error });
       console.error("Error:", error);
     }
   });

@@ -1,27 +1,32 @@
-# Webflow Form Handler
+# Form Handlers
 
-A drop-in script for Webflow forms that handles validation (email + phone) and forwards submissions to Klaviyo.
+Two drop-in form handlers:
 
-## Setup
+- **`script.js`** — validates (email + phone) and forwards submissions to Klaviyo.
+- **`aisle.js`** — validates phone, then posts to Aisle and Klaviyo in parallel.
 
-Place the snippet in the page's footer and call `handleForm(...)`.
+Both handlers:
+- Look up the submit button via `form.querySelector("[type='submit']")`.
+- Validate on submit only (no live validation, no submit-button toggling).
+- Swap the submit button into a spinner state while in-flight; restore it on error.
+- Append all URL query params to the form as hidden inputs.
+- Push `{ event: "form-submitted" }` and `{ event: "form_submitted" }` to `dataLayer` after a successful submit.
 
-### Phone number field
+---
 
-The phone input must have `name="phone_number"`. When `hasPhoneNumber` is `true`, the script auto-loads [VanillaMasker](https://github.com/vanilla-masker/vanilla-masker) and applies the mask `999-999-9999`. Validation uses the regex `/^\d{3}-\d{3}-\d{4}$/`.
+## `script.js` — Klaviyo handler
 
-### Loading the handler
+### Loading
 
 ```html
 <script src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@1/script.min.js"></script>
 <script>
   handleForm({
     formId: "",
-    submitBtnId: "",
     hasPhoneNumber: false,
     phoneNumberIsRequired: false,
-    advancedEmailCheck: false,    // enable strict regex + TLD/typo blocklist
-    submitFunction: () => {},     // runs after success / when the Webflow done state appears
+    advancedEmailCheck: false,    // strict regex + TLD/typo blocklist
+    submitFunction: () => {},     // runs after successful submit
     klaviyo: {
       klaviyoA: "",
       klaviyoG: "",
@@ -30,18 +35,19 @@ The phone input must have `name="phone_number"`. When `hasPhoneNumber` is `true`
 </script>
 ```
 
-## Top-level options
+If `hasPhoneNumber` is `true`, [VanillaMasker](https://github.com/vanilla-masker/vanilla-masker) must be loaded on the page — the script calls `VMasker(phoneField).maskPattern("999-999-9999")` directly.
+
+### Options
 
 | Option | Description |
 | --- | --- |
 | `formId` | ID of the `<form>` element. |
-| `submitBtnId` | ID of the submit button. The script disables/enables it based on validation. |
-| `hasPhoneNumber` | If `true`, the form has a `[name='phone_number']` field — VanillaMasker is loaded and the field is validated. |
-| `phoneNumberIsRequired` | If `true`, an empty phone number is invalid; otherwise empty is allowed. |
+| `hasPhoneNumber` | If `true`, the form has a `[name='phone_number']` field — it's masked with VanillaMasker and validated against `/^\d{3}-\d{3}-\d{4}$/`. |
+| `phoneNumberIsRequired` | If `true`, empty phone is invalid; otherwise empty is allowed. |
 | `advancedEmailCheck` | Enables strict email regex plus a built-in TLD/typo blocklist (e.g. `.con`, `gmial.com`). |
-| `submitFunction` | Called after a successful submit (and when the Webflow `.w-form-done` element becomes visible). |
+| `submitFunction` | Called after a successful submit. |
 
-## Klaviyo
+### Klaviyo options
 
 ```js
 klaviyo: {
@@ -53,18 +59,93 @@ klaviyo: {
 }
 ```
 
-Notes:
 - `accepts-marketing` and any `forceChecksTrue` entries are always sent as `true`.
 - If `hasPhoneNumber` is on and there is no `[name='sms-consent']` field, `sms-consent` is auto-added to `forceChecksTrue`.
 
-## Validation
+### Validation behavior
 
-- Email and phone validators are registered only when their feature is enabled (`advancedEmailCheck`, `hasPhoneNumber`).
-- The submit button starts disabled if any validator is registered and re-enables only when every registered field is valid.
-- Invalid fields get a red border/outline on `focusout`; styles clear once the field becomes valid.
-- Pressing `Enter` while the submit button is disabled triggers an alert prompting the user to check for typos.
+- Checked once on submit. Invalid → `alert("Field invalid. Please check for typos.")` and the request is not sent.
 
-## Behavior notes
+---
 
-- All URL query params are appended to the form as hidden inputs before submission.
-- After success, `dataLayer` receives `{ event: "form-submitted" }` and `{ event: "form_submitted" }`.
+## `aisle.js` — Aisle + Klaviyo handler
+
+Posts to Aisle's `manual-input` webhook and Klaviyo in parallel.
+
+### Loading
+
+Requires [VanillaMasker](https://github.com/vanilla-masker/vanilla-masker) and Sentry to be loaded on the page beforehand.
+
+```html
+<script src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@1/aisle.min.js"></script>
+<script>
+  handleForm({
+    formId: "",
+    campaignPhoneNumber: "",
+    apiKey: "",
+    klaviyoA: "",
+    klaviyoG: "",
+    submitFunction: () => {},
+  });
+</script>
+```
+
+### Form requirements
+
+- A `#phone_number` input (masked `999-999-9999`).
+- An `#email` input.
+- A submit button inside the form (found via `[type='submit']`).
+
+### Options
+
+| Option | Description |
+| --- | --- |
+| `formId` | ID of the `<form>` element. |
+| `campaignPhoneNumber` | Sent to Aisle as `campaignPhoneNumber`. |
+| `apiKey` | Aisle API key (sent as the `x-api-key` header). |
+| `klaviyoA` / `klaviyoG` | Klaviyo list params. |
+| `submitFunction` | Called after both Aisle and Klaviyo resolve successfully. |
+
+### Validation behavior
+
+- Phone is required: the digit-stripped value must be at least 10 digits long.
+- Invalid → `alert("Phone field invalid. Please check if every number is present.")` and the request is not sent.
+
+### Klaviyo payload
+
+`Accepts-Marketing` and `sms_consent` are always sent as `true`. All URL params are forwarded as `$fields`.
+
+### Error handling
+
+If either request fails, the submit button's HTML and disabled state are restored, the error is logged to `console.error`, and `Sentry.captureException` is called.
+
+### Full example
+
+```html
+<!-- Dependencies (load before aisle.js) -->
+<script defer src="https://cdn.jsdelivr.net/gh/vanilla-masker/vanilla-masker/lib/vanilla-masker.min.js"></script>
+<script src="https://browser.sentry-cdn.com/7.119.0/bundle.min.js" crossorigin="anonymous"></script>
+<script>
+  Sentry.init({ dsn: "https://<your-dsn>@sentry.io/<project>" });
+</script>
+
+<form id="signup-form">
+  <input type="email" id="email" name="email" placeholder="Email" required />
+  <input type="tel" id="phone_number" name="phone_number" placeholder="555-123-4567" required />
+  <button type="submit">Get VIP access</button>
+</form>
+
+<script src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@1/aisle.min.js"></script>
+<script>
+  handleForm({
+    formId: "signup-form",
+    campaignPhoneNumber: "5550001111",
+    apiKey: "aisle_xxxxxxxxxxxxxxxx",
+    klaviyoA: "XxXxXx",
+    klaviyoG: "YyYyYy",
+    submitFunction: () => {
+      window.location.href = "/thank-you";
+    },
+  });
+</script>
+```
