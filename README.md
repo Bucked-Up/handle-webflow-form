@@ -19,19 +19,22 @@ Both handlers:
 ### Loading
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@1/script.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/gh/vanilla-masker/vanilla-masker/lib/vanilla-masker.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@1/script.min.js"></script>
 <script>
-  handleForm({
-    formId: "",
-    hasPhoneNumber: false,
-    phoneNumberIsRequired: false,
-    advancedEmailCheck: false,    // strict regex + TLD/typo blocklist
-    submitFunction: () => {},     // runs after successful submit
-    klaviyo: {
-      klaviyoA: "",
-      klaviyoG: "",
-    },
-  });
+  document.addEventListener("DOMContentLoaded",()=>{
+    handleForm({
+      formId: "",
+      hasPhoneNumber: false,
+      phoneNumberIsRequired: false,
+      advancedEmailCheck: false,    // strict regex + TLD/typo blocklist
+      submitFunction: () => {},     // runs after successful submit
+      klaviyo: {
+        klaviyoA: "",
+        klaviyoG: "",
+      },
+    });
+  })
 </script>
 ```
 
@@ -74,19 +77,20 @@ Posts to Aisle's `manual-input` webhook and Klaviyo in parallel.
 
 ### Loading
 
-Requires [VanillaMasker](https://github.com/vanilla-masker/vanilla-masker) and Sentry to be loaded on the page beforehand.
-
 ```html
-<script src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@1/aisle.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/gh/vanilla-masker/vanilla-masker/lib/vanilla-masker.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@1/aisle.min.js"></script>
 <script>
-  handleForm({
-    formId: "",
-    campaignPhoneNumber: "",
-    apiKey: "",
-    klaviyoA: "",
-    klaviyoG: "",
-    submitFunction: () => {},
-  });
+  document.addEventListener("DOMContentLoaded",()=>{
+    handleForm({
+      formId: "",
+      campaignPhoneNumber: "",
+      apiKey: "",
+      klaviyoA: "",
+      klaviyoG: "",
+      submitFunction: () => {},
+    });
+  })
 </script>
 ```
 
@@ -117,17 +121,13 @@ Requires [VanillaMasker](https://github.com/vanilla-masker/vanilla-masker) and S
 
 ### Error handling
 
-If either request fails, the submit button's HTML and disabled state are restored, the error is logged to `console.error`, and `Sentry.captureException` is called.
+If either request fails, the submit button's HTML and disabled state are restored, the error is logged to `console.error`.
 
 ### Full example
 
 ```html
 <!-- Dependencies (load before aisle.js) -->
 <script defer src="https://cdn.jsdelivr.net/gh/vanilla-masker/vanilla-masker/lib/vanilla-masker.min.js"></script>
-<script src="https://browser.sentry-cdn.com/7.119.0/bundle.min.js" crossorigin="anonymous"></script>
-<script>
-  Sentry.init({ dsn: "https://<your-dsn>@sentry.io/<project>" });
-</script>
 
 <form id="signup-form">
   <input type="email" id="email" name="email" placeholder="Email" required />

@@ -1,21 +1,4 @@
 const handleForm = ({ campaignPhoneNumber, apiKey, formId, submitFunction, klaviyoA, klaviyoG }) => {
-  const trySentry = ({ error, message }) => {
-    try {
-      if (error) {
-        console.error(error);
-        Sentry.captureException(error);
-      } else {
-        console.error(message);
-        const sentryError = new Error();
-        sentryError.name = "Error";
-        sentryError.message = message;
-        Sentry.captureException(sentryError);
-      }
-    } catch (e) {
-      console.error("Error loading sentry.");
-    }
-  };
-
   const form = document.getElementById(formId);
   const submitBtn = form.querySelector("[type='submit']");
   const phoneField = document.getElementById("phone_number");
@@ -118,7 +101,6 @@ const handleForm = ({ campaignPhoneNumber, apiKey, formId, submitFunction, klavi
     } catch (error) {
       submitBtn.innerHTML = originalBtnHTML;
       submitBtn.removeAttribute("disabled");
-      trySentry({ error });
       console.error("Error:", error);
     }
   });
