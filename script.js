@@ -1,4 +1,4 @@
-const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, klaviyoA: undefined, klaviyoG: undefined }, submitFunction = () => {} }) => {
+const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, klaviyoA: undefined, klaviyoG: undefined }, customEndpoint = { fn: undefined, onError: undefined }, submitFunction = () => {} }) => {
   const form = document.getElementById(formId);
   const submitBtn = form.querySelector("[type='submit']");
   const urlParams = new URLSearchParams(window.location.search);
@@ -35,17 +35,31 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     form.appendChild(input);
   });
 
-  const handleKlaviyo = async (e) => {
+  const buildFormData = (e) => {
     const formData = new FormData(e.target);
     if (hasPhoneNumber) {
       formData.set("phone_number", phoneField.value.trim());
     }
+    return formData;
+  };
+
+  const handleKlaviyo = async (e) => {
+    const formData = buildFormData(e);
     klaviyo.customTextFields = klaviyo.customTextFields || [];
     klaviyo.customCheckFields = klaviyo.customCheckFields || [];
     klaviyo.forceChecksTrue = klaviyo.forceChecksTrue || [];
     if (hasPhoneNumber && phoneField.value.trim() !== "" && !document.querySelector("[name='sms-consent']")) {
       klaviyo.forceChecksTrue.push("sms-consent");
     }
+    const fullName = (formData.get("full_name") || "").trim().replace(/\s+/g, " ");
+    if (fullName !== "") {
+      const nameParts = fullName.split(" ");
+      formData.set("first_name", nameParts[0]);
+      if (nameParts.length > 1) {
+        formData.set("last_name", nameParts.slice(1).join(" "));
+      }
+    }
+    formData.delete("full_name");
     formData.append("$fields", ["accepts-marketing", ...klaviyo.customTextFields, ...klaviyo.customCheckFields, ...klaviyo.forceChecksTrue, ...Object.keys(utms)]);
     klaviyo.customCheckFields.forEach((checkFieldId) => {
       const field = document.getElementById(checkFieldId);
@@ -66,12 +80,28 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     if (!data.success) return Promise.reject("Error sending to klaviyo: " + data.errors);
   };
 
+  const handleCustomEndpoint = async (e) => {
+    try {
+      await customEndpoint.fn(buildFormData(e), e);
+    } catch (error) {
+      if (typeof customEndpoint.onError === "function") {
+        try {
+          customEndpoint.onError(error);
+        } catch (handlerError) {
+          console.error(handlerError);
+        }
+      }
+      throw error;
+    }
+  };
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!isEmailValid() || !isPhoneValid()) {
       alert("Field invalid. Please check for typos.");
       return;
     }
+    const originalBtnHTML = submitBtn.innerHTML;
     submitBtn.innerHTML = `
         <svg style="display:block;margin:auto;" width="24" height="24" stroke="#fff"
           viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -92,13 +122,17 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
       `;
     submitBtn.setAttribute("disabled", "disabled");
     try {
-      if (klaviyo.klaviyoA) await handleKlaviyo(e);
+      const tasks = [];
+      if (klaviyo.klaviyoA) tasks.push(handleKlaviyo(e));
+      if (typeof customEndpoint.fn === "function") tasks.push(handleCustomEndpoint(e));
+      await Promise.all(tasks);
       window.dataLayer = window.dataLayer || [];
       window.dataLayer.push({ event: "form-submitted" });
       window.dataLayer.push({ event: "form_submitted" });
       submitFunction();
     } catch (e) {
-      submitBtn.innerHTML = "GET VIP ACCESS"
+      submitBtn.innerHTML = originalBtnHTML;
+      submitBtn.removeAttribute("disabled");
       console.error(e);
     }
   });

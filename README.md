@@ -2,7 +2,7 @@
 
 Two drop-in form handlers:
 
-- **`script.js`** — validates (email + phone) and forwards submissions to Klaviyo.
+- **`script.js`** — validates (email + phone) and forwards submissions to Klaviyo and/or your own endpoint.
 - **`aisle.js`** — validates phone, then posts to Aisle and Klaviyo in parallel.
 
 Both handlers:
@@ -33,6 +33,10 @@ Both handlers:
         klaviyoA: "",
         klaviyoG: "",
       },
+      customEndpoint: {              // optional, fires in parallel with Klaviyo
+        fn: async (formData, event) => {},
+        onError: (error) => {},
+      },
     });
   })
 </script>
@@ -49,6 +53,7 @@ If `hasPhoneNumber` is `true`, [VanillaMasker](https://github.com/vanilla-masker
 | `phoneNumberIsRequired` | If `true`, empty phone is invalid; otherwise empty is allowed. |
 | `advancedEmailCheck` | Enables strict email regex plus a built-in TLD/typo blocklist (e.g. `.con`, `gmial.com`). |
 | `submitFunction` | Called after a successful submit. |
+| `customEndpoint` | Optional `{ fn, onError }` pair for posting to your own backend. See below. |
 
 ### Klaviyo options
 
@@ -64,6 +69,34 @@ klaviyo: {
 
 - `accepts-marketing` and any `forceChecksTrue` entries are always sent as `true`.
 - If `hasPhoneNumber` is on and there is no `[name='sms-consent']` field, `sms-consent` is auto-added to `forceChecksTrue`.
+- If the form has a `full_name` field, it's split into `first_name` (everything before the first space) and `last_name` (the remainder). A single-word name sends `first_name` only. `full_name` itself is dropped from the payload. This applies to the Klaviyo payload only — `customEndpoint` receives the raw `full_name`.
+
+### `customEndpoint`
+
+Sends the submission to your own backend. Fires **in parallel** with Klaviyo when both are
+configured, and on its own when `klaviyo` is omitted.
+
+```js
+customEndpoint: {
+  fn: async (formData, event) => {
+    const res = await fetch("/api/lead", { method: "POST", body: formData });
+    if (!res.ok) throw new Error("Lead endpoint failed: " + res.statusText);
+  },
+  onError: (error) => {
+    console.error(error);
+  },
+}
+```
+
+| Key | Description |
+| --- | --- |
+| `fn` | `async (formData, event)`. Required to enable the integration — it's skipped unless this is a function. `formData` is a fresh `FormData` built from the form (phone normalized, URL params included) and is **not** the one sent to Klaviyo, so Klaviyo's `$fields`/checkbox rewrites don't leak into your payload. `event` is the raw submit event. |
+| `onError` | Optional `(error)`. Called if `fn` rejects. |
+
+**A rejection fails the whole submit**, exactly like a Klaviyo failure: `onError` runs, then the
+error propagates — the `dataLayer` events are not pushed, `submitFunction` is not called, and the
+submit button is restored to its original label and re-enabled. Throwing from inside `onError` is
+contained (logged, never masks the original error).
 
 ### Validation behavior
 
