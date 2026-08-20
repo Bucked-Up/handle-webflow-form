@@ -29,6 +29,7 @@ Both handlers:
       phoneNumberIsRequired: false,
       advancedEmailCheck: false,    // strict regex + TLD/typo blocklist
       submitFunction: () => {},     // runs after successful submit
+      ignoreUrlParams: [],           // URL params NOT to forward as hidden inputs
       klaviyo: {
         klaviyoA: "",
         klaviyoG: "",
@@ -54,6 +55,7 @@ If `hasPhoneNumber` is `true`, [VanillaMasker](https://github.com/vanilla-masker
 | `advancedEmailCheck` | Enables strict email regex plus a built-in TLD/typo blocklist (e.g. `.con`, `gmial.com`). |
 | `submitFunction` | Called after a successful submit. |
 | `customEndpoint` | Optional `{ fn, onError }` pair for posting to your own backend. See below. |
+| `ignoreUrlParams` | Array of URL param names to skip. Defaults to `[]` (every param is forwarded). Use it when a param shares a name with a real form field — otherwise it's appended as a second hidden input with that name and the field is submitted twice. Ignored params are also left out of Klaviyo's `$fields`. |
 
 ### Klaviyo options
 

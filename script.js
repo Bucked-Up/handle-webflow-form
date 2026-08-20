@@ -1,4 +1,4 @@
-const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, klaviyoA: undefined, klaviyoG: undefined }, customEndpoint = { fn: undefined, onError: undefined }, submitFunction = () => {} }) => {
+const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, klaviyoA: undefined, klaviyoG: undefined }, customEndpoint = { fn: undefined, onError: undefined }, ignoreUrlParams = [], submitFunction = () => {} }) => {
   const form = document.getElementById(formId);
   const submitBtn = form.querySelector("[type='submit']");
   const urlParams = new URLSearchParams(window.location.search);
@@ -25,7 +25,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     return phoneRegex.test(phoneField.value);
   };
 
-  const utms = Object.fromEntries(urlParams.entries());
+  const utms = Object.fromEntries([...urlParams.entries()].filter(([key]) => !ignoreUrlParams.includes(key)));
   Object.keys(utms).forEach((key) => {
     const input = document.createElement("input");
     input.type = "text";
