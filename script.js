@@ -1,4 +1,4 @@
-const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, klaviyoA: undefined, klaviyoG: undefined }, customEndpoint = { fn: undefined, onError: undefined }, ignoreUrlParams = [], submitFunction = () => {} }) => {
+const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, ignoreFields: undefined, klaviyoA: undefined, klaviyoG: undefined }, customEndpoint = { fn: undefined, onError: undefined }, ignoreUrlParams = [], submitFunction = () => {} }) => {
   const form = document.getElementById(formId);
   const submitBtn = form.querySelector("[type='submit']");
   const urlParams = new URLSearchParams(window.location.search);
@@ -48,6 +48,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     klaviyo.customTextFields = klaviyo.customTextFields || [];
     klaviyo.customCheckFields = klaviyo.customCheckFields || [];
     klaviyo.forceChecksTrue = klaviyo.forceChecksTrue || [];
+    klaviyo.ignoreFields = klaviyo.ignoreFields || [];
     if (hasPhoneNumber && phoneField.value.trim() !== "" && !document.querySelector("[name='sms-consent']")) {
       klaviyo.forceChecksTrue.push("sms-consent");
     }
@@ -60,7 +61,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
       }
     }
     formData.delete("full_name");
-    formData.append("$fields", ["accepts-marketing", ...klaviyo.customTextFields, ...klaviyo.customCheckFields, ...klaviyo.forceChecksTrue, ...Object.keys(utms)]);
+    formData.append("$fields", ["accepts-marketing", ...klaviyo.customTextFields, ...klaviyo.customCheckFields, ...klaviyo.forceChecksTrue, ...Object.keys(utms)].filter((f) => !klaviyo.ignoreFields.includes(f)));
     klaviyo.customCheckFields.forEach((checkFieldId) => {
       const field = document.getElementById(checkFieldId);
       formData.set(checkFieldId, field.checked ? true : false);
@@ -68,6 +69,8 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     ["accepts-marketing", ...klaviyo.forceChecksTrue].forEach((checkFieldId) => {
       formData.set(checkFieldId, true);
     });
+
+    klaviyo.ignoreFields.forEach((name) => formData.delete(name));
 
     const response = await fetch(`https://manage.kmail-lists.com/ajax/subscriptions/subscribe?a=${klaviyo.klaviyoA}&g=${klaviyo.klaviyoG}`, {
       method: "POST",

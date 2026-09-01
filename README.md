@@ -66,11 +66,13 @@ klaviyo: {
   customTextFields: [],         // names of extra text fields to forward
   customCheckFields: [],        // ids of extra checkbox fields (sent as true/false)
   forceChecksTrue: [],          // names that should be sent as true regardless of the form
+  ignoreFields: [],             // names of form fields NOT to send to Klaviyo
 }
 ```
 
 - `accepts-marketing` and any `forceChecksTrue` entries are always sent as `true`.
 - If `hasPhoneNumber` is on and there is no `[name='sms-consent']` field, `sms-consent` is auto-added to `forceChecksTrue`.
+- `ignoreFields` lists field `name`s to strip from the Klaviyo payload right before the request — they're also left out of `$fields`. This affects Klaviyo only: `customEndpoint` still receives them.
 - If the form has a `full_name` field, it's split into `first_name` (everything before the first space) and `last_name` (the remainder). A single-word name sends `first_name` only. `full_name` itself is dropped from the payload. This applies to the Klaviyo payload only — `customEndpoint` receives the raw `full_name`.
 
 ### `customEndpoint`
