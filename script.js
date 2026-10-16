@@ -5,7 +5,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
 
   const emailField = form.querySelector("[name='email']");
   const phoneField = hasPhoneNumber ? form.querySelector("[name='phone_number']") : null;
-  if(phoneField){
+  if (phoneField) {
     VMasker(phoneField).maskPattern("999-999-9999");
   }
 
@@ -61,7 +61,10 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
       }
     }
     formData.delete("full_name");
-    formData.append("$fields", ["accepts-marketing", ...klaviyo.customTextFields, ...klaviyo.customCheckFields, ...klaviyo.forceChecksTrue, ...Object.keys(utms)].filter((f) => !klaviyo.ignoreFields.includes(f)));
+    formData.append(
+      "$fields",
+      ["accepts-marketing", ...klaviyo.customTextFields, ...klaviyo.customCheckFields, ...klaviyo.forceChecksTrue, ...Object.keys(utms)].filter((f) => !klaviyo.ignoreFields.includes(f)),
+    );
     klaviyo.customCheckFields.forEach((checkFieldId) => {
       const field = document.getElementById(checkFieldId);
       formData.set(checkFieldId, field.checked ? true : false);
@@ -129,9 +132,15 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
       if (klaviyo.klaviyoA) tasks.push(handleKlaviyo(e));
       if (typeof customEndpoint.fn === "function") tasks.push(handleCustomEndpoint(e));
       await Promise.all(tasks);
+      const leadCapturedEvent = { event: "lead-captured" };
+      const email = form.querySelector("[type='email']");
+      if (email) {
+        leadCapturedEvent.traits = {
+          email: email.value,
+        };
+      }
       window.dataLayer = window.dataLayer || [];
-      window.dataLayer.push({ event: "form-submitted" });
-      window.dataLayer.push({ event: "form_submitted" });
+      window.dataLayer.push(leadCapturedEvent);
       submitFunction();
     } catch (e) {
       submitBtn.innerHTML = originalBtnHTML;
