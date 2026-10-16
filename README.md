@@ -63,6 +63,7 @@ If `hasPhoneNumber` is `true`, [VanillaMasker](https://github.com/vanilla-masker
 klaviyo: {
   klaviyoA: "",                 // list "a" param
   klaviyoG: "",                 // list "g" param
+  smsKlaviyoList: "",           // optional SMS list id (see below)
   customTextFields: [],         // names of extra text fields to forward
   customCheckFields: [],        // ids of extra checkbox fields (sent as true/false)
   forceChecksTrue: [],          // names that should be sent as true regardless of the form
@@ -72,6 +73,7 @@ klaviyo: {
 
 - `accepts-marketing` and any `forceChecksTrue` entries are always sent as `true`.
 - If `hasPhoneNumber` is on and there is no `[name='sms-consent']` field, `sms-consent` is auto-added to `forceChecksTrue`.
+- If `smsKlaviyoList` is set, a phone number is filled in, and SMS consent is true (the `sms-consent` checkbox is checked, or `sms-consent` is in `forceChecksTrue` — including the auto-add above), the same payload is also sent to that list, in parallel with `klaviyoG`. A failure on either list fails the submit.
 - `ignoreFields` lists field `name`s to strip from the Klaviyo payload right before the request — they're also left out of `$fields`. This affects Klaviyo only: `customEndpoint` still receives them.
 - If the form has a `full_name` field, it's split into `first_name` (everything before the first space) and `last_name` (the remainder). A single-word name sends `first_name` only. `full_name` itself is dropped from the payload. This applies to the Klaviyo payload only — `customEndpoint` receives the raw `full_name`.
 

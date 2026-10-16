@@ -1,4 +1,4 @@
-const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, ignoreFields: undefined, klaviyoA: undefined, klaviyoG: undefined }, customEndpoint = { fn: undefined, onError: undefined }, ignoreUrlParams = [], submitFunction = () => {} }) => {
+const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, ignoreFields: undefined, klaviyoA: undefined, klaviyoG: undefined, smsKlaviyoList: undefined }, customEndpoint = { fn: undefined, onError: undefined }, ignoreUrlParams = [], submitFunction = () => {} }) => {
   const form = document.getElementById(formId);
   const submitBtn = form.querySelector("[type='submit']");
   const urlParams = new URLSearchParams(window.location.search);
@@ -52,6 +52,8 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     if (hasPhoneNumber && phoneField.value.trim() !== "" && !document.querySelector("[name='sms-consent']")) {
       klaviyo.forceChecksTrue.push("sms-consent");
     }
+    const smsConsentField = document.querySelector("[name='sms-consent']");
+    const hasSmsConsent = klaviyo.forceChecksTrue.includes("sms-consent") || (smsConsentField && smsConsentField.checked);
     const fullName = (formData.get("full_name") || "").trim().replace(/\s+/g, " ");
     if (fullName !== "") {
       const nameParts = fullName.split(" ");
@@ -75,15 +77,23 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
 
     klaviyo.ignoreFields.forEach((name) => formData.delete(name));
 
-    const response = await fetch(`https://manage.kmail-lists.com/ajax/subscriptions/subscribe?a=${klaviyo.klaviyoA}&g=${klaviyo.klaviyoG}`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!response.ok) {
-      return Promise.reject("Klaviyo Network response was not ok: " + response.statusText);
+    const subscribe = async (listId) => {
+      const response = await fetch(`https://manage.kmail-lists.com/ajax/subscriptions/subscribe?a=${klaviyo.klaviyoA}&g=${listId}`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) {
+        return Promise.reject(`Klaviyo Network response was not ok (list ${listId}): ` + response.statusText);
+      }
+      const data = await response.json();
+      if (!data.success) return Promise.reject(`Error sending to klaviyo (list ${listId}): ` + data.errors);
+    };
+
+    const lists = [klaviyo.klaviyoG];
+    if (klaviyo.smsKlaviyoList && hasPhoneNumber && phoneField.value.trim() !== "" && hasSmsConsent) {
+      lists.push(klaviyo.smsKlaviyoList);
     }
-    const data = await response.json();
-    if (!data.success) return Promise.reject("Error sending to klaviyo: " + data.errors);
+    await Promise.all(lists.map(subscribe));
   };
 
   const handleCustomEndpoint = async (e) => {
