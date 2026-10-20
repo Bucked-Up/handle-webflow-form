@@ -75,21 +75,20 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
       });
     klaviyo.ignoreFields.forEach((name) => delete properties[name]);
 
-    const subscriptions = { email: { marketing: { consent: "SUBSCRIBED" } } };
-    if (hasSmsConsent) {
-      subscriptions.sms = { marketing: { consent: "SUBSCRIBED" } };
-    }
+    const emailConsent = { marketing: { consent: "SUBSCRIBED" } };
+    const smsConsent = { marketing: { consent: "SUBSCRIBED" } };
+    const sendToSmsList = klaviyo.smsKlaviyoList && hasSmsConsent;
 
     const profileAttributes = {
       email: formData.get("email"),
       properties,
-      subscriptions,
     };
     if (phoneDigits !== "" && !isIgnored("phone_number")) profileAttributes.phone_number = `+1${phoneDigits}`;
     if (firstName && !isIgnored("first_name")) profileAttributes.first_name = firstName;
     if (lastName && !isIgnored("last_name")) profileAttributes.last_name = lastName;
 
-    const subscribe = async (listId) => {
+    // Only channels listed in `subscriptions` get subscribed to the list
+    const subscribe = async (listId, subscriptions) => {
       const response = await fetch(`https://a.klaviyo.com/client/subscriptions?company_id=${klaviyo.klaviyoA}`, {
         method: "POST",
         headers: {
@@ -100,7 +99,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
           data: {
             type: "subscription",
             attributes: {
-              profile: { data: { type: "profile", attributes: profileAttributes } },
+              profile: { data: { type: "profile", attributes: { ...profileAttributes, subscriptions } } },
             },
             relationships: {
               list: { data: { type: "list", id: listId } },
@@ -114,11 +113,15 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
       }
     };
 
-    const lists = [klaviyo.klaviyoG];
-    if (klaviyo.smsKlaviyoList && hasSmsConsent) {
-      lists.push(klaviyo.smsKlaviyoList);
+    // Main list gets email consent (plus SMS when there's no dedicated SMS list).
+    // SMS list gets SMS consent only, so it never triggers an email double opt-in.
+    const mainSubscriptions = { email: emailConsent };
+    if (hasSmsConsent && !sendToSmsList) mainSubscriptions.sms = smsConsent;
+    const requests = [subscribe(klaviyo.klaviyoG, mainSubscriptions)];
+    if (sendToSmsList) {
+      requests.push(subscribe(klaviyo.smsKlaviyoList, { sms: smsConsent }));
     }
-    await Promise.all(lists.map(subscribe));
+    await Promise.all(requests);
   };
 
   const handleCustomEndpoint = async (e) => {
