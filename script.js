@@ -49,48 +49,73 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     klaviyo.customCheckFields = klaviyo.customCheckFields || [];
     klaviyo.forceChecksTrue = klaviyo.forceChecksTrue || [];
     klaviyo.ignoreFields = klaviyo.ignoreFields || [];
-    if (hasPhoneNumber && phoneField.value.trim() !== "" && !document.querySelector("[name='sms-consent']")) {
-      klaviyo.forceChecksTrue.push("sms-consent");
-    }
-    const smsConsentField = document.querySelector("[name='sms-consent']");
-    const hasSmsConsent = klaviyo.forceChecksTrue.includes("sms-consent") || (smsConsentField && smsConsentField.checked);
-    const fullName = (formData.get("full_name") || "").trim().replace(/\s+/g, " ");
-    if (fullName !== "") {
-      const nameParts = fullName.split(" ");
-      formData.set("first_name", nameParts[0]);
-      if (nameParts.length > 1) {
-        formData.set("last_name", nameParts.slice(1).join(" "));
-      }
-    }
-    formData.delete("full_name");
-    formData.append(
-      "$fields",
-      ["accepts-marketing", ...klaviyo.customTextFields, ...klaviyo.customCheckFields, ...klaviyo.forceChecksTrue, ...Object.keys(utms)].filter((f) => !klaviyo.ignoreFields.includes(f)),
-    );
-    klaviyo.customCheckFields.forEach((checkFieldId) => {
-      const field = document.getElementById(checkFieldId);
-      formData.set(checkFieldId, field.checked ? true : false);
-    });
-    ["accepts-marketing", ...klaviyo.forceChecksTrue].forEach((checkFieldId) => {
-      formData.set(checkFieldId, true);
-    });
+    const isIgnored = (name) => klaviyo.ignoreFields.includes(name);
 
-    klaviyo.ignoreFields.forEach((name) => formData.delete(name));
+    const phoneDigits = hasPhoneNumber ? phoneField.value.replace(/\D/g, "") : "";
+    const smsConsentField = document.querySelector("[name='sms-consent']");
+    // No consent checkbox on the form means submitting a phone number implies SMS consent
+    const hasSmsConsent = phoneDigits !== "" && (!smsConsentField || smsConsentField.checked || klaviyo.forceChecksTrue.includes("sms-consent"));
+
+    const fullName = (formData.get("full_name") || "").trim().replace(/\s+/g, " ");
+    const nameParts = fullName !== "" ? fullName.split(" ") : [];
+    const firstName = nameParts[0] || (formData.get("first_name") || "").trim();
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : (formData.get("last_name") || "").trim();
+
+    const properties = {};
+    [...klaviyo.customTextFields, ...Object.keys(utms)].forEach((name) => {
+      if (formData.has(name)) properties[name] = formData.get(name);
+    });
+    klaviyo.customCheckFields.forEach((checkFieldId) => {
+      properties[checkFieldId] = document.getElementById(checkFieldId).checked;
+    });
+    klaviyo.forceChecksTrue
+      .filter((name) => name !== "sms-consent")
+      .forEach((name) => {
+        properties[name] = true;
+      });
+    klaviyo.ignoreFields.forEach((name) => delete properties[name]);
+
+    const subscriptions = { email: { marketing: { consent: "SUBSCRIBED" } } };
+    if (hasSmsConsent) {
+      subscriptions.sms = { marketing: { consent: "SUBSCRIBED" } };
+    }
+
+    const profileAttributes = {
+      email: formData.get("email"),
+      properties,
+      subscriptions,
+    };
+    if (phoneDigits !== "" && !isIgnored("phone_number")) profileAttributes.phone_number = `+1${phoneDigits}`;
+    if (firstName && !isIgnored("first_name")) profileAttributes.first_name = firstName;
+    if (lastName && !isIgnored("last_name")) profileAttributes.last_name = lastName;
 
     const subscribe = async (listId) => {
-      const response = await fetch(`https://manage.kmail-lists.com/ajax/subscriptions/subscribe?a=${klaviyo.klaviyoA}&g=${listId}`, {
+      const response = await fetch(`https://a.klaviyo.com/client/subscriptions?company_id=${klaviyo.klaviyoA}`, {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/vnd.api+json",
+          revision: "2026-10-15",
+        },
+        body: JSON.stringify({
+          data: {
+            type: "subscription",
+            attributes: {
+              profile: { data: { type: "profile", attributes: profileAttributes } },
+            },
+            relationships: {
+              list: { data: { type: "list", id: listId } },
+            },
+          },
+        }),
       });
       if (!response.ok) {
-        return Promise.reject(`Klaviyo Network response was not ok (list ${listId}): ` + response.statusText);
+        const errorBody = await response.text();
+        return Promise.reject(`Error sending to klaviyo (list ${listId}): ${response.status} ${errorBody}`);
       }
-      const data = await response.json();
-      if (!data.success) return Promise.reject(`Error sending to klaviyo (list ${listId}): ` + data.errors);
     };
 
     const lists = [klaviyo.klaviyoG];
-    if (klaviyo.smsKlaviyoList && hasPhoneNumber && phoneField.value.trim() !== "" && hasSmsConsent) {
+    if (klaviyo.smsKlaviyoList && hasSmsConsent) {
       lists.push(klaviyo.smsKlaviyoList);
     }
     await Promise.all(lists.map(subscribe));
