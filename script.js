@@ -43,6 +43,16 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     return formData;
   };
 
+  const getNames = (formData) => {
+    const fullName = (formData.get("full_name") || "").trim().replace(/\s+/g, " ");
+    const nameParts = fullName !== "" ? fullName.split(" ") : [];
+    const firstName = nameParts[0] || (formData.get("first_name") || "").trim();
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : (formData.get("last_name") || "").trim();
+    return { firstName, lastName };
+  };
+
+  const getPhoneDigits = () => (hasPhoneNumber ? phoneField.value.replace(/\D/g, "") : "");
+
   const handleKlaviyo = async (e) => {
     const formData = buildFormData(e);
     klaviyo.customTextFields = klaviyo.customTextFields || [];
@@ -51,15 +61,12 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     klaviyo.ignoreFields = klaviyo.ignoreFields || [];
     const isIgnored = (name) => klaviyo.ignoreFields.includes(name);
 
-    const phoneDigits = hasPhoneNumber ? phoneField.value.replace(/\D/g, "") : "";
+    const phoneDigits = getPhoneDigits();
     const smsConsentField = document.querySelector("[name='sms-consent']");
     // No consent checkbox on the form means submitting a phone number implies SMS consent
     const hasSmsConsent = phoneDigits !== "" && (!smsConsentField || smsConsentField.checked || klaviyo.forceChecksTrue.includes("sms-consent"));
 
-    const fullName = (formData.get("full_name") || "").trim().replace(/\s+/g, " ");
-    const nameParts = fullName !== "" ? fullName.split(" ") : [];
-    const firstName = nameParts[0] || (formData.get("first_name") || "").trim();
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : (formData.get("last_name") || "").trim();
+    const { firstName, lastName } = getNames(formData);
 
     const properties = {};
     [...klaviyo.customTextFields, ...Object.keys(utms)].forEach((name) => {
@@ -139,6 +146,21 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     }
   };
 
+  const pushLeadCapturedEvent = (e) => {
+    const { firstName, lastName } = getNames(buildFormData(e));
+    const phoneDigits = getPhoneDigits();
+    const traits = {};
+    const email = form.querySelector("[type='email']");
+    if (email) traits.email = email.value;
+    if (firstName) traits.first_name = firstName;
+    if (lastName) traits.last_name = lastName;
+    if (phoneDigits) traits.phone = `+1${phoneDigits}`;
+    const leadCapturedEvent = { event: "lead-captured" };
+    if (Object.keys(traits).length) leadCapturedEvent.traits = traits;
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push(leadCapturedEvent);
+  };
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!isEmailValid() || !isPhoneValid()) {
@@ -170,15 +192,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
       if (klaviyo.klaviyoA) tasks.push(handleKlaviyo(e));
       if (typeof customEndpoint.fn === "function") tasks.push(handleCustomEndpoint(e));
       await Promise.all(tasks);
-      const leadCapturedEvent = { event: "lead-captured" };
-      const email = form.querySelector("[type='email']");
-      if (email) {
-        leadCapturedEvent.traits = {
-          email: email.value,
-        };
-      }
-      window.dataLayer = window.dataLayer || [];
-      window.dataLayer.push(leadCapturedEvent);
+      pushLeadCapturedEvent(e);
       submitFunction();
     } catch (e) {
       submitBtn.innerHTML = originalBtnHTML;
