@@ -5,8 +5,21 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
 
   const emailField = form.querySelector("[name='email']");
   const phoneField = hasPhoneNumber ? form.querySelector("[name='phone_number']") : null;
+  // Formats to 999-999-9999 on every input event, which also covers paste and browser autofill
+  const formatPhone = (value) => {
+    let digits = value.replace(/\D/g, "");
+    if (digits.length === 11 && digits[0] === "1") digits = digits.slice(1);
+    digits = digits.slice(0, 10);
+    return [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6)].filter(Boolean).join("-");
+  };
+  const applyPhoneFormat = () => {
+    const formatted = formatPhone(phoneField.value);
+    if (formatted !== phoneField.value) phoneField.value = formatted;
+  };
   if (phoneField) {
-    VMasker(phoneField).maskPattern("999-999-9999");
+    if (!phoneField.hasAttribute("autocomplete")) phoneField.setAttribute("autocomplete", "tel-national");
+    phoneField.addEventListener("input", applyPhoneFormat);
+    applyPhoneFormat();
   }
 
   const isEmailValid = () => {
@@ -14,13 +27,13 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     // prettier-ignore
     const tldTypos=[".con",".cmo",".cim",".vom",".xom",".coom",".comn",".comm",".cok",".col",".cop",".cpom",".com,",".com/",".com\\",".c0m",".cocm",".com-",".com;",".coim",".com`",".c.om",".com/",".cpm",".cim",".cim",".cok",".c9m",".netw",".nte",".nett",".net,",".net/",".net\\",".orgg",".ogr",".org,",".org/",".org\\",".ed.",".edu,",".edu/",".edu\\",".cim",".coim",".coim.",".coim,",".coim/",".coim\\",".dom",".fom",".xom",".vcom",".bom",".hom",".ncom",".moc",".mcom",".comc",".cokn",".vomm",".copm",".cma",".ckm",".colm",".como",".coom",".coom.",".coom,",".coom/",".coom\\",".co.,",".co./",".co.\\",".comm",".comm.",".comm,",".comm/",".comm\\","@gamil.com","@gmai.com","@gmaill.com","@gnail.com","@gmail.con","@gmail,com","@gmail.","@gmail,","@gmail\\","@gmail/","@gmail.co","@gmail.cmo","@gmai.com","@gmail.ccm","@gmail.cm","@gmail.om","@gmail.xom","@gmal.com","@gmial.com","@g-mail.com","@gmil.com","@ygmail.com","@hotmial.com","@hotmal.com","@hotmaill.com","@htomail.com","@hotmial.co","@hotmal.co","@hotmail.con","@hotmail,com","@hotmail.","@hotmail,","@hotmail\\","@hotmail/","@hotmail.co","@hotmail.cmo","@hotmai.com","@outlok.com","@outllok.com","@outlok.co","@outllook.com","@outllok.com","@outlook.con","@outlook,com","@outlook.","@outlook,","@outlook\\","@outlook/","@yahho.com","@yaoo.com","@yhoo.com","@yaho.com","@yahao.com","@yahoo.co","@yahho.co","@yahoo.con","@yahoo,com","@yahoo.","@yahoo,","@yahoo\\","@yahoo/","@icloud.co.","@icloud.con","@icloud,com","@iclod.com","@icoud.com","@ilcoud.com","@icloid.com","@icould.com","@icloud.cm","@icloud.om","@icloud,com","@icloud.","@icloud,","@icloud\\","@msn.con","@msn.cm","@msn,com","@msn.","@msn,","@msn\\","@msn/","@live.con","@live.cm","@live,com","@live.","@live,","@live\\","@live/","@aol.con","@aol.cm","@aol,com","@aol.","@aol,","@aol\\","@aol/","@protonnmail.com","@prontonmail.com","@protonmail.con","@protonmail.cm","@protonmail,com","@protonmail.","@protonmail,","@protonmail\\","@protonmail/","@protonmail.co","@pmail.con","@pmail.cm","@pmail,com","@pmail.","@pmail,","@pmail\\","@pmail/","@gogle.com","@gooogle.com","@goggle.com","@goole.com","@googel.com","@gogl.com","@gogole.com",".cok",".c0m",".c9m",".cpm",".c0n",".c,com",".clom",".ckom",".com/",".com\\",".com,",".com;",".com-",".com_",".com!",".com?",".com]",".com[",".com}",".com{","@gmail.clm","@hmail.com","@gmsil.com","@yqhoo.com","@gamil.com","@gmil.com"];
     const emailRegex = /^(?!.*\.\.)([a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+)@([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,24}$/;
-    const email = emailField.value;
+    const email = emailField.value.trim();
     return emailRegex.test(email) && !tldTypos.some((t) => email.toLowerCase().endsWith(t));
   };
 
   const isPhoneValid = () => {
     if (!hasPhoneNumber) return true;
-    const phoneRegex = /^\d{3}-\d{3}-\d{4}$/;
+    const phoneRegex = /^[2-9]\d{2}-\d{3}-\d{4}$/;
     if (!phoneNumberIsRequired && phoneField.value.trim() === "") return true;
     return phoneRegex.test(phoneField.value);
   };
@@ -150,8 +163,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     const { firstName, lastName } = getNames(buildFormData(e));
     const phoneDigits = getPhoneDigits();
     const traits = {};
-    const email = form.querySelector("[type='email']");
-    if (email) traits.email = email.value;
+    if (emailField) traits.email = emailField.value.trim();
     if (firstName) traits.first_name = firstName;
     if (lastName) traits.last_name = lastName;
     if (phoneDigits) traits.phone = `+1${phoneDigits}`;
@@ -163,6 +175,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (phoneField) applyPhoneFormat();
     if (!isEmailValid() || !isPhoneValid()) {
       alert("Field invalid. Please check for typos.");
       return;

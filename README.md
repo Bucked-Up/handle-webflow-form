@@ -19,7 +19,6 @@ Both handlers:
 ### Loading
 
 ```html
-<script defer src="https://cdn.jsdelivr.net/gh/vanilla-masker/vanilla-masker/lib/vanilla-masker.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@1/script.min.js"></script>
 <script>
   document.addEventListener("DOMContentLoaded",()=>{
@@ -43,14 +42,12 @@ Both handlers:
 </script>
 ```
 
-If `hasPhoneNumber` is `true`, [VanillaMasker](https://github.com/vanilla-masker/vanilla-masker) must be loaded on the page — the script calls `VMasker(phoneField).maskPattern("999-999-9999")` directly.
-
 ### Options
 
 | Option | Description |
 | --- | --- |
 | `formId` | ID of the `<form>` element. |
-| `hasPhoneNumber` | If `true`, the form has a `[name='phone_number']` field — it's masked with VanillaMasker and validated against `/^\d{3}-\d{3}-\d{4}$/`. |
+| `hasPhoneNumber` | If `true`, the form has a `[name='phone_number']` field — it's formatted as `999-999-9999` on every input (typing, paste and browser autofill; a leading `+1` is dropped) and validated against `/^[2-9]\d{2}-\d{3}-\d{4}$/`. Gets `autocomplete="tel-national"` unless the field already sets `autocomplete`. |
 | `phoneNumberIsRequired` | If `true`, empty phone is invalid; otherwise empty is allowed. |
 | `advancedEmailCheck` | Enables strict email regex plus a built-in TLD/typo blocklist (e.g. `.con`, `gmial.com`). |
 | `submitFunction` | Called after a successful submit. |
@@ -117,7 +114,6 @@ Posts to Aisle's `manual-input` webhook and Klaviyo in parallel.
 ### Loading
 
 ```html
-<script defer src="https://cdn.jsdelivr.net/gh/vanilla-masker/vanilla-masker/lib/vanilla-masker.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@1/aisle.min.js"></script>
 <script>
   document.addEventListener("DOMContentLoaded",()=>{
@@ -135,7 +131,7 @@ Posts to Aisle's `manual-input` webhook and Klaviyo in parallel.
 
 ### Form requirements
 
-- A `#phone_number` input (masked `999-999-9999`).
+- A `#phone_number` input (formatted as `999-999-9999` on input, including autofill; a leading `+1` is dropped).
 - An `#email` input.
 - A submit button inside the form (found via `[type='submit']`).
 
@@ -166,7 +162,6 @@ If either request fails, the submit button's HTML and disabled state are restore
 
 ```html
 <!-- Dependencies (load before aisle.js) -->
-<script defer src="https://cdn.jsdelivr.net/gh/vanilla-masker/vanilla-masker/lib/vanilla-masker.min.js"></script>
 
 <form id="signup-form">
   <input type="email" id="email" name="email" placeholder="Email" required />

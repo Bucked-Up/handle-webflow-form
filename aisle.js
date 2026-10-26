@@ -3,7 +3,20 @@ const handleForm = ({ campaignPhoneNumber, apiKey, formId, submitFunction, klavi
   const submitBtn = form.querySelector("[type='submit']");
   const phoneField = document.getElementById("phone_number");
   const emailField = document.getElementById("email");
-  VMasker(phoneField).maskPattern("999-999-9999");
+  // Formats to 999-999-9999 on every input event, which also covers paste and browser autofill
+  const formatPhone = (value) => {
+    let digits = value.replace(/\D/g, "");
+    if (digits.length === 11 && digits[0] === "1") digits = digits.slice(1);
+    digits = digits.slice(0, 10);
+    return [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6)].filter(Boolean).join("-");
+  };
+  const applyPhoneFormat = () => {
+    const formatted = formatPhone(phoneField.value);
+    if (formatted !== phoneField.value) phoneField.value = formatted;
+  };
+  if (!phoneField.hasAttribute("autocomplete")) phoneField.setAttribute("autocomplete", "tel-national");
+  phoneField.addEventListener("input", applyPhoneFormat);
+  applyPhoneFormat();
 
   const phoneNumberIsNotValid = () => phoneField.value.trim().replace(/\D/g, '').length < 10;
 
@@ -55,6 +68,7 @@ const handleForm = ({ campaignPhoneNumber, apiKey, formId, submitFunction, klavi
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    applyPhoneFormat();
     if (phoneNumberIsNotValid()) {
       alert("Phone field invalid. Please check if every number is present.");
       return;
