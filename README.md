@@ -19,7 +19,7 @@ Both handlers:
 ### Loading
 
 ```html
-<script defer src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@1/script.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/gh/Bucked-Up/handle-webflow-form@3/script.min.js"></script>
 <script>
   document.addEventListener("DOMContentLoaded",()=>{
     handleForm({
