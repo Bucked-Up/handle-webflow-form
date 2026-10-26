@@ -18,7 +18,12 @@ const handleForm = ({ campaignPhoneNumber, apiKey, formId, submitFunction, klavi
   phoneField.addEventListener("input", applyPhoneFormat);
   applyPhoneFormat();
 
-  const phoneNumberIsNotValid = () => phoneField.value.trim().replace(/\D/g, '').length < 10;
+  const getPhoneError = () => {
+    const digits = phoneField.value.replace(/\D/g, "");
+    if (digits === "") return "Please enter your phone number.";
+    if (digits.length < 10) return "Please enter your full 10-digit phone number.";
+    return "";
+  };
 
   const postAisle = async (body) => {
     const response = await fetch("https://console.gotoaisle.com/api/webhooks/manual-input", {
@@ -69,8 +74,9 @@ const handleForm = ({ campaignPhoneNumber, apiKey, formId, submitFunction, klavi
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     applyPhoneFormat();
-    if (phoneNumberIsNotValid()) {
-      alert("Phone field invalid. Please check if every number is present.");
+    const phoneError = getPhoneError();
+    if (phoneError) {
+      alert(phoneError);
       return;
     }
 

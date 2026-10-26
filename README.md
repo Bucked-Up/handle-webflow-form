@@ -103,7 +103,9 @@ contained (logged, never masks the original error).
 
 ### Validation behavior
 
-- Checked once on submit. Invalid → `alert("Field invalid. Please check for typos.")` and the request is not sent.
+- Checked once on submit. If anything is invalid, an `alert` lists one message per failing field and the request is not sent:
+  - Email (only with `advancedEmailCheck`): bad format, or a likely typo (the message names the matched ending, e.g. `".con"`).
+  - Phone: empty when required, fewer than 10 digits, or an area code starting with 0 or 1.
 
 ---
 
@@ -148,7 +150,7 @@ Posts to Aisle's `manual-input` webhook and Klaviyo in parallel.
 ### Validation behavior
 
 - Phone is required: the digit-stripped value must be at least 10 digits long.
-- Invalid → `alert("Phone field invalid. Please check if every number is present.")` and the request is not sent.
+- Invalid → `alert` says whether the phone is empty or missing digits, and the request is not sent.
 
 ### Klaviyo payload
 
