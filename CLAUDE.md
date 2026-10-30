@@ -50,11 +50,11 @@ The two scripts are independent copies. They do not share code. Some logic occur
 ### `script.js` submit sequence
 
 1. The script formats the phone field (`[name='phone_number']`) on each `input` event and before validation.
-2. `getEmailError` and `getPhoneError` return a message or `""`. One `alert` shows all messages, and the submit stops.
-3. The script replaces the submit button content with a spinner and disables the button.
-4. `handleKlaviyo` and `handleCustomEndpoint` run in parallel with `Promise.all`. Klaviyo runs only when `klaviyo.klaviyoA` is set. The custom endpoint runs only when `customEndpoint.fn` is a function.
-5. On success, `pushLeadCapturedEvent` pushes `{ event: "lead-captured", traits }` to `dataLayer`. Then `submitFunction` runs.
-6. On failure, the script restores the button and writes the error to `console.error`.
+2. `getEmailError` and `getPhoneError` return a message or `""`. One `alert` shows all messages, and the submit stops. With `isWebflow`, `stopPropagation()` also stops the Webflow submit.
+3. `setSubmitLoading` disables the button. A `<button>` gets a spinner. An `<input>` gets its `data-wait` text.
+4. `waitForWebflow` (only with `isWebflow`), `handleKlaviyo`, and `handleCustomEndpoint` run in parallel with `Promise.all`. Klaviyo runs only when `klaviyo.klaviyoA` is set. The custom endpoint runs only when `customEndpoint.fn` is a function.
+5. On success, `pushLeadCapturedEvent` pushes `{ event: "lead-captured", traits }` to `dataLayer`. It runs only when `fireLeadEvent` is `true` (the default). Then `submitFunction` runs.
+6. On failure, `resetSubmitButton` restores the button. The script writes the error to `console.error`.
 
 `buildFormData` makes a new `FormData` for each consumer. Thus, Klaviyo changes do not go into the custom endpoint data.
 
@@ -71,6 +71,25 @@ The two scripts are independent copies. They do not share code. Some logic occur
   - `forceChecksTrue` contains `"sms-consent"`.
 - `getNames` splits `full_name` into a first name and a last name. If there is no `full_name`, it uses `first_name` and `last_name`.
 - Profile `properties` contain `customTextFields`, URL parameters, `customCheckFields` (by element ID), and `forceChecksTrue`. `ignoreFields` removes keys from `properties`. It also removes `phone_number`, `first_name`, and `last_name` from the profile.
+- URL parameters in `PROFILE_FIELD_NAMES` (`email`, `phone_number`, `full_name`, `first_name`, `last_name`) do not go into `properties`.
+- A `customTextFields` name with two or more checkboxes (`isCheckboxGroup`) sends `formData.getAll(name)` as an array.
+- `phoneFromUrl` (only without `hasPhoneNumber`): `getUrlPhoneDigits` reads the `phone_number` URL parameter. It accepts exactly 10 US digits after an optional leading 1, and it does not cut a longer number. The URL phone goes to the profile and to the lead event `traits`. It never gives SMS consent.
+- `pushLeadCapturedEvent` reads the email from `FormData`, so an `email` URL parameter also counts.
+
+### Webflow mode (`isWebflow`) in `script.js`
+
+This model comes from `strikerFormHandler`. Keep the two implementations aligned.
+
+- webflow.js submits each `.w-form form` from one delegated jQuery listener on `document`. That listener ignores `defaultPrevented` and POSTs to `/api/v1/form/<site-id>`. The script lets Webflow submit. Do not add a capture listener that stops and replays the submit.
+- The script stops Webflow only on a validation error. It calls `e.stopPropagation()` from the form listener, which runs before the `document` listener.
+- Call `waitForWebflow()` synchronously from the submit listener. Webflow `$.ajax` fires `ajaxSend` in the same dispatch. If no `ajaxSend` occurs before the next `setTimeout(0)`, Webflow refused the submit, and the promise rejects.
+- Keep `applyPhoneFormat()` before the first `await`. Webflow then serializes the formatted phone.
+- Success is `xhr.responseJSON.code === 200` in the jQuery `ajaxComplete` event. This is the same test that webflow.js uses. After 20 seconds, the promise rejects and the script shows `.w-form-fail`.
+- jQuery runs the Webflow `.done()` before `ajaxComplete`. Thus, the `ajaxComplete` handler can undo the Webflow changes in the same task. It sets `form.style.display = ""`, and it puts the button back into the loading state. If the submit already failed (`isSubmitting` is false), it resets the button.
+- A stylesheet rule `[data-bfh-wf-hidden]{display:none!important}` hides `.w-form-done`. The script does not hide `.w-form-fail`.
+- The script sets `jQuery.data(form, ".w-form").redirect` to `null` at submit. Thus, `data-redirect` cannot cancel a Klaviyo request.
+- An `<input type="submit">` trap: Webflow reads `btn.val()` as the label to restore. Thus, with `isWebflow`, the script does not change an `<input>` before the Webflow listener runs. The Webflow `data-wait` text covers that time.
+- Do not disable the submit button before submit. Browser autofill does not fire the events that enable it again.
 
 ### `aisle.js`
 

@@ -1,4 +1,11 @@
-const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, ignoreFields: undefined, klaviyoA: undefined, klaviyoG: undefined, smsKlaviyoList: undefined }, customEndpoint = { fn: undefined, onError: undefined }, ignoreUrlParams = [], submitFunction = () => {} }) => {
+const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, ignoreFields: undefined, klaviyoA: undefined, klaviyoG: undefined, smsKlaviyoList: undefined }, customEndpoint = { fn: undefined, onError: undefined }, ignoreUrlParams = [], isWebflow = false, fireLeadEvent = true, phoneFromUrl = false, submitFunction = () => {} }) => {
+  // Webflow's own form POST; the last segment is the site ID. /signFile (file uploads) must not match.
+  const WEBFLOW_FORM_ENDPOINT_PATTERN = /\/api\/v1\/form\/[^/]+$/;
+  const WEBFLOW_SUBMIT_TIMEOUT_MS = 20000;
+  // The jQuery.data key webflow.js keeps each form's state under (handler, redirect, done, fail, btn)
+  const WEBFLOW_DATA_KEY = ".w-form";
+  const WEBFLOW_HIDDEN_ATTR = "data-bfh-wf-hidden";
+
   const form = document.getElementById(formId);
   const submitBtn = form.querySelector("[type='submit']");
   const urlParams = new URLSearchParams(window.location.search);
@@ -72,6 +79,27 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
 
   const getPhoneDigits = () => (hasPhoneNumber ? phoneField.value.replace(/\D/g, "") : "");
 
+  // A phone from the URL (for example on a thank-you page) goes to the profile only, never to SMS consent.
+  // The visitor can't fix a hidden value, so a number that isn't a valid US phone is skipped, not rejected.
+  const getUrlPhoneDigits = () => {
+    if (!phoneFromUrl || hasPhoneNumber) return "";
+    let digits = (urlParams.get("phone_number") || "").replace(/\D/g, "");
+    if (digits.length === 11 && digits[0] === "1") digits = digits.slice(1);
+    if (digits === "") return "";
+    // Unlike formatPhone, no truncation: a longer number is a foreign one, not a typo
+    if (!/^[2-9]\d{9}$/.test(digits)) {
+      console.warn("handleForm: phone_number in the URL is not a valid US phone; not sending it.");
+      return "";
+    }
+    return digits;
+  };
+
+  // URL parameters that are profile attributes; they don't also go into properties
+  const PROFILE_FIELD_NAMES = ["email", "phone_number", "full_name", "first_name", "last_name"];
+
+  // Several checkboxes with one name send all checked values as an array
+  const isCheckboxGroup = (name) => form.querySelectorAll(`input[type='checkbox'][name='${CSS.escape(name)}']`).length > 1;
+
   const handleKlaviyo = async (e) => {
     const formData = buildFormData(e);
     klaviyo.customTextFields = klaviyo.customTextFields || [];
@@ -81,6 +109,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     const isIgnored = (name) => klaviyo.ignoreFields.includes(name);
 
     const phoneDigits = getPhoneDigits();
+    const profilePhoneDigits = phoneDigits || getUrlPhoneDigits();
     const smsConsentField = document.querySelector("[name='sms-consent']");
     // No consent checkbox on the form means submitting a phone number implies SMS consent
     const hasSmsConsent = phoneDigits !== "" && (!smsConsentField || smsConsentField.checked || klaviyo.forceChecksTrue.includes("sms-consent"));
@@ -88,8 +117,9 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     const { firstName, lastName } = getNames(formData);
 
     const properties = {};
-    [...klaviyo.customTextFields, ...Object.keys(utms)].forEach((name) => {
-      if (formData.has(name)) properties[name] = formData.get(name);
+    [...klaviyo.customTextFields, ...Object.keys(utms).filter((name) => !PROFILE_FIELD_NAMES.includes(name))].forEach((name) => {
+      if (isCheckboxGroup(name)) properties[name] = formData.getAll(name);
+      else if (formData.has(name)) properties[name] = formData.get(name);
     });
     klaviyo.customCheckFields.forEach((checkFieldId) => {
       properties[checkFieldId] = document.getElementById(checkFieldId).checked;
@@ -109,7 +139,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
       email: formData.get("email"),
       properties,
     };
-    if (phoneDigits !== "" && !isIgnored("phone_number")) profileAttributes.phone_number = `+1${phoneDigits}`;
+    if (profilePhoneDigits !== "" && !isIgnored("phone_number")) profileAttributes.phone_number = `+1${profilePhoneDigits}`;
     if (firstName && !isIgnored("first_name")) profileAttributes.first_name = firstName;
     if (lastName && !isIgnored("last_name")) profileAttributes.last_name = lastName;
 
@@ -166,10 +196,12 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
   };
 
   const pushLeadCapturedEvent = (e) => {
-    const { firstName, lastName } = getNames(buildFormData(e));
-    const phoneDigits = getPhoneDigits();
+    const formData = buildFormData(e);
+    const { firstName, lastName } = getNames(formData);
+    const phoneDigits = getPhoneDigits() || getUrlPhoneDigits();
+    const email = (formData.get("email") || "").trim();
     const traits = {};
-    if (emailField) traits.email = emailField.value.trim();
+    if (email) traits.email = email;
     if (firstName) traits.first_name = firstName;
     if (lastName) traits.last_name = lastName;
     if (phoneDigits) traits.phone = `+1${phoneDigits}`;
@@ -179,15 +211,29 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     window.dataLayer.push(leadCapturedEvent);
   };
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (phoneField) applyPhoneFormat();
-    const errors = [getEmailError(), getPhoneError()].filter(Boolean);
-    if (errors.length) {
-      alert(errors.join("\n"));
+  if (isWebflow) {
+    // A stylesheet !important beats the inline display jQuery's .toggle() writes, so Webflow's success
+    // block never shows. .w-form-fail is left alone: it is Webflow's error UI and still useful.
+    if (!window.__bfhWebflowStylesInjected) {
+      window.__bfhWebflowStylesInjected = true;
+      const style = document.createElement("style");
+      style.textContent = `[${WEBFLOW_HIDDEN_ATTR}]{display:none!important}`;
+      document.head.appendChild(style);
+    }
+    form.closest(".w-form")?.querySelector(":scope > .w-form-done")?.setAttribute(WEBFLOW_HIDDEN_ATTR, "");
+  }
+
+  // <input type="submit"> (Webflow's default button) has no innerHTML to put a spinner in
+  const submitIsInput = submitBtn.tagName === "INPUT";
+  const originalSubmitLabel = submitIsInput ? submitBtn.value : submitBtn.innerHTML;
+  let isSubmitting = false;
+
+  const setSubmitLoading = () => {
+    submitBtn.setAttribute("disabled", "disabled");
+    if (submitIsInput) {
+      submitBtn.value = submitBtn.dataset.wait || "Please wait...";
       return;
     }
-    const originalBtnHTML = submitBtn.innerHTML;
     submitBtn.innerHTML = `
         <svg style="display:block;margin:auto;" width="24" height="24" stroke="#fff"
           viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -206,17 +252,95 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
           </g>
         </svg>
       `;
-    submitBtn.setAttribute("disabled", "disabled");
+  };
+
+  const resetSubmitButton = () => {
+    submitBtn.removeAttribute("disabled");
+    if (submitIsInput) submitBtn.value = originalSubmitLabel;
+    else submitBtn.innerHTML = originalSubmitLabel;
+  };
+
+  // Webflow submits the form itself, from a delegated jQuery listener on document that ignores our
+  // preventDefault. We let it, and only wait for its POST to land so submitFunction can't abort it.
+  // Must be called synchronously from the submit listener: Webflow's listener runs right after ours,
+  // in the same dispatch, and that is when its ajaxSend fires.
+  const waitForWebflow = () => {
+    const $ = window.jQuery;
+    const webflowForm = $?.data(form, WEBFLOW_DATA_KEY);
+    if (!webflowForm?.handler) {
+      console.warn("handleForm: isWebflow is set but Webflow is not handling this form; not waiting for it.");
+      return Promise.resolve();
+    }
+    // Webflow reads this only after its POST succeeds, so clearing it here still lands in time, and
+    // stops Webflow navigating away while Klaviyo is still in flight
+    webflowForm.redirect = null;
+
+    return new Promise((resolve, reject) => {
+      let sent = false;
+      const isWebflowRequest = (settings) => WEBFLOW_FORM_ENDPOINT_PATTERN.test(settings?.url || "");
+      const onSend = (_event, _xhr, settings) => {
+        if (isWebflowRequest(settings)) sent = true;
+      };
+      const onComplete = (_event, xhr, settings) => {
+        if (!isWebflowRequest(settings)) return;
+        cleanup();
+        // jQuery runs Webflow's .done() before it triggers ajaxComplete, so this lands in the same task
+        // as Webflow hiding the form: it never visibly disappears
+        form.style.display = "";
+        // Webflow has just reset the button, but Klaviyo may still be running. If another request
+        // already failed the submit, leave the button usable instead.
+        if (isSubmitting) setSubmitLoading();
+        else resetSubmitButton();
+        // Same success test webflow.js uses
+        if (xhr.responseJSON?.code === 200) resolve();
+        else reject(new Error("Webflow submission failed"));
+      };
+      const timeout = setTimeout(() => {
+        cleanup();
+        webflowForm.fail?.show();
+        reject(new Error("Webflow submission timed out"));
+      }, WEBFLOW_SUBMIT_TIMEOUT_MS);
+      const cleanup = () => {
+        clearTimeout(timeout);
+        $(document).off("ajaxSend", onSend).off("ajaxComplete", onComplete);
+      };
+      $(document).on("ajaxSend", onSend).on("ajaxComplete", onComplete);
+      // By the next task the dispatch is over. No POST by then means Webflow refused the submit (its own
+      // validation alert, an unsolved captcha) and nothing will ever complete.
+      setTimeout(() => {
+        if (sent) return;
+        cleanup();
+        reject(new Error("Webflow did not submit the form"));
+      }, 0);
+    });
+  };
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    // Still synchronous, so Webflow (which serializes the form after this listener) gets the formatted phone too
+    if (phoneField) applyPhoneFormat();
+    const errors = [getEmailError(), getPhoneError()].filter(Boolean);
+    if (errors.length) {
+      // Keeps Webflow's document-level listener from submitting a lead we reject
+      if (isWebflow) e.stopPropagation();
+      alert(errors.join("\n"));
+      return;
+    }
+    isSubmitting = true;
+    // Webflow reads an <input>'s value as the label to restore later, so changing it before Webflow's
+    // listener runs would make it "restore" our loading text. Its own data-wait covers that window.
+    if (!(isWebflow && submitIsInput)) setSubmitLoading();
     try {
       const tasks = [];
+      if (isWebflow) tasks.push(waitForWebflow());
       if (klaviyo.klaviyoA) tasks.push(handleKlaviyo(e));
       if (typeof customEndpoint.fn === "function") tasks.push(handleCustomEndpoint(e));
       await Promise.all(tasks);
-      pushLeadCapturedEvent(e);
+      if (fireLeadEvent) pushLeadCapturedEvent(e);
       submitFunction();
     } catch (e) {
-      submitBtn.innerHTML = originalBtnHTML;
-      submitBtn.removeAttribute("disabled");
+      isSubmitting = false;
+      resetSubmitButton();
       console.error(e);
     }
   });
