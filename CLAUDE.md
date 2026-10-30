@@ -53,7 +53,7 @@ The two scripts are independent copies. They do not share code. Some logic occur
 2. `getEmailError` and `getPhoneError` return a message or `""`. One `alert` shows all messages, and the submit stops. With `isWebflow`, `stopPropagation()` also stops the Webflow submit.
 3. `setSubmitLoading` disables the button. A `<button>` gets a spinner. An `<input>` gets its `data-wait` text.
 4. `waitForWebflow` (only with `isWebflow`), `handleKlaviyo`, and `handleCustomEndpoint` run in parallel with `Promise.all`. Klaviyo runs only when `klaviyo.klaviyoA` is set. The custom endpoint runs only when `customEndpoint.fn` is a function.
-5. On success, `pushLeadCapturedEvent` pushes `{ event: "lead-captured", traits }` to `dataLayer`. It runs only when `fireLeadEvent` is `true` (the default). Then `submitFunction` runs.
+5. On success, `pushLeadCapturedEvent` pushes `{ event: "lead-captured", userid, traits }` to `dataLayer`. `userid` is the value of the `rl_anonymous_id` cookie. It runs only when `fireLeadEvent` is `true` (the default). Then `submitFunction` runs.
 6. On failure, `resetSubmitButton` restores the button. The script writes the error to `console.error`.
 
 `buildFormData` makes a new `FormData` for each consumer. Thus, Klaviyo changes do not go into the custom endpoint data.
