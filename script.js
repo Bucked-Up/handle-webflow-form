@@ -165,6 +165,29 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     }
   };
 
+  const getCookie = (name) => {
+    const entry = document.cookie.split("; ").find((cookie) => cookie.startsWith(`${name}=`));
+    if (!entry) return "";
+    try {
+      return decodeURIComponent(entry.slice(name.length + 1));
+    } catch {
+      return "";
+    }
+  };
+
+  const getUserId = () => {
+    const value = getCookie("rl_anonymous_id");
+    // RudderStack v3 stores cookies as "RS_ENC_v3_" + base64 of a JSON string.
+    if (value.startsWith("RS_ENC_v3_")) {
+      try {
+        return String(JSON.parse(atob(value.slice("RS_ENC_v3_".length))) || "");
+      } catch {
+        return "";
+      }
+    }
+    return value.replace(/^"|"$/g, "");
+  };
+
   const pushLeadCapturedEvent = (e) => {
     const { firstName, lastName } = getNames(buildFormData(e));
     const phoneDigits = getPhoneDigits();
@@ -174,6 +197,8 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     if (lastName) traits.last_name = lastName;
     if (phoneDigits) traits.phone = `+1${phoneDigits}`;
     const leadCapturedEvent = { event: "lead-captured" };
+    const userId = getUserId();
+    if (userId) leadCapturedEvent.userid = userId;
     if (Object.keys(traits).length) leadCapturedEvent.traits = traits;
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push(leadCapturedEvent);

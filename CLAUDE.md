@@ -53,7 +53,7 @@ The two scripts are independent copies. They do not share code. Some logic occur
 2. `getEmailError` and `getPhoneError` return a message or `""`. One `alert` shows all messages, and the submit stops.
 3. The script replaces the submit button content with a spinner and disables the button.
 4. `handleKlaviyo` and `handleCustomEndpoint` run in parallel with `Promise.all`. Klaviyo runs only when `klaviyo.klaviyoA` is set. The custom endpoint runs only when `customEndpoint.fn` is a function.
-5. On success, `pushLeadCapturedEvent` pushes `{ event: "lead-captured", traits }` to `dataLayer`. Then `submitFunction` runs.
+5. On success, `pushLeadCapturedEvent` pushes `{ event: "lead-captured", userid, traits }` to `dataLayer`. `userid` is the value of the `rl_anonymous_id` cookie. Then `submitFunction` runs.
 6. On failure, the script restores the button and writes the error to `console.error`.
 
 `buildFormData` makes a new `FormData` for each consumer. Thus, Klaviyo changes do not go into the custom endpoint data.

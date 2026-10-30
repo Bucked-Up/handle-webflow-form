@@ -156,6 +156,7 @@ After a successful submit, the handler pushes this event to `window.dataLayer`:
 ```js
 {
   event: "lead-captured",
+  userid: "<rl_anonymous_id value>",
   traits: {
     email: "name@example.com",
     first_name: "Jane",
@@ -166,6 +167,8 @@ After a successful submit, the handler pushes this event to `window.dataLayer`:
 ```
 
 The handler adds a trait only when it has a value. If there are no traits, the event has no `traits` key.
+
+The handler sets `userid` to the value of the `rl_anonymous_id` cookie. If there is no cookie, the event has no `userid` key.
 
 ---
 
