@@ -1,4 +1,4 @@
-const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, ignoreFields: undefined, klaviyoA: undefined, klaviyoG: undefined, smsKlaviyoList: undefined }, customEndpoint = { fn: undefined, onError: undefined }, ignoreUrlParams = [], isWebflow = false, fireLeadEvent = true, phoneFromUrl = false, submitFunction = () => {} }) => {
+const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEmailCheck, klaviyo = { customTextFields: undefined, customCheckFields: undefined, forceChecksTrue: undefined, ignoreFields: undefined, klaviyoA: undefined, klaviyoG: undefined, smsKlaviyoList: undefined }, customEndpoint = { fn: undefined, onError: undefined }, ignoreUrlParams = [], isWebflow = false, fireLeadEvent = true, leadEventName = "lead-captured", phoneFromUrl = false, submitFunction = () => {} }) => {
   // Webflow's own form POST; the last segment is the site ID. /signFile (file uploads) must not match.
   const WEBFLOW_FORM_ENDPOINT_PATTERN = /\/api\/v1\/form\/[^/]+$/;
   const WEBFLOW_SUBMIT_TIMEOUT_MS = 20000;
@@ -228,7 +228,7 @@ const handleForm = ({ formId, hasPhoneNumber, phoneNumberIsRequired, advancedEma
     if (firstName) traits.first_name = firstName;
     if (lastName) traits.last_name = lastName;
     if (phoneDigits) traits.phone = `+1${phoneDigits}`;
-    const leadCapturedEvent = { event: "lead-captured" };
+    const leadCapturedEvent = { event: leadEventName };
     const userId = getUserId();
     if (userId) leadCapturedEvent.userid = userId;
     if (Object.keys(traits).length) leadCapturedEvent.traits = traits;
